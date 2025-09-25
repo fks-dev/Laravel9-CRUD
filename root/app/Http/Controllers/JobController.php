@@ -18,7 +18,7 @@ class JobController extends Controller
     {
         //一覧画面
         //id 降順でレコードセットを取得
-        $jobs = job::orderByDesc("id")->paginate(20);
+        $jobs = Job::orderByDesc("id")->paginate(20);
         return view("admin.jobs.index",[
             "jobs" => $jobs,
         ]);
@@ -117,5 +117,61 @@ class JobController extends Controller
         //削除
         $job->delete();
         return redirect(route("admin.jobs.index"));
+    }
+
+    //CSVダウンロード
+    public function downloadCsv(){
+        //CSVレコード配列取得
+        $csvRecords = self::getJobCsvRecords();
+        //CSVストリームダウンロード
+        return self::streamDownloadCsv("job.csv",$csvRecords);
+    }
+
+    private static function getJobCsvRecords():array
+    {
+        //id降順で全レコード取得
+        $jobs = Job::orderByDesc("id")->get();
+
+        $csvRecords = [
+            ["ID","名称"], //ヘッダー
+        ];
+        foreach ($jobs as $job) {
+            $csvRecords[] = [$job->id,$job->name]; //レコード
+        }
+        return $csvRecords;
+    }
+
+    private static function streamDownloadCsv(
+        string $name,
+        iterable $fieldsList,
+        string $separator = ",",
+        string $enclosure = '"',
+        string $escape = "\\",
+        string $eol = "\r\n"
+    ) {
+        $contentType = "text/plain";
+        if ($separator === ","){
+            $contentType = "text/csv"; //CSVファイル
+        }else if ($separator === "\t") {
+            $contentType = "text/tab-separated-values"; //TSVファイル
+        }
+        $headers = ["Content-Type" => $contentType];
+
+        return response()->streamDownload(function () use ($fieldsList, $separator, $enclosure, $escape, $eol) {
+            $stream = fopen("php://output", "w");
+            foreach ($fieldsList as $fields){
+                fputcsv($stream, $fields, $separator, $enclosure, $escape, $eol);
+            }
+            fclose($stream);
+        },$name, $headers);
+    }
+    //課題 CSV形式で取得機能追加
+    public function downloadTsv()
+    {
+        //CSVレコード取得
+        $tsvRecords = self::getJobCsvRecords();
+
+        //区切り文字をタブにしてダウンロード
+        return self::streamDownloadCsv("jobs.tsv",$tsvRecords,"\t");
     }
 }
